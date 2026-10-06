@@ -29,9 +29,11 @@ jobs:
         run: |
           docker run --platform linux/arm64 --rm -v "${{ github.workspace }}":/work -w /work debian:bookworm bash -c '
             set -euo pipefail
-            apt-get update && apt-get install -y initramfs-tools busybox-static git cpio kmod dpkg-dev
+            apt-get update && apt-get install -y \
+              initramfs-tools busybox-static git cpio kmod dpkg-dev debhelper \
+              kpartx parted e2fsprogs android-sdk-libsparse-utils udev util-linux
 
-            # 1. Заглушки хостового ядра
+            # 1. Заглушки ядра хоста
             HOST_KERNEL=$(uname -r)
             mkdir -p /boot /lib/modules/"$HOST_KERNEL"
             printf "CONFIG_RD_GZIP=y\nCONFIG_RD_ZSTD=y\n" > /boot/config-"$HOST_KERNEL"
@@ -43,12 +45,19 @@ jobs:
             sed -i "s/^MODULES=.*/MODULES=list/" /etc/initramfs-tools/initramfs.conf
             sed -i "s/^COMPRESS=.*/COMPRESS=gzip/" /etc/initramfs-tools/initramfs.conf
 
-            # 3. Клонируем и ставим хуки Halium
+            # 3. Собираем и ставим initramfs-tools-halium
             git clone https://github.com/droidian/initramfs-tools-halium.git /tmp/halium
-            cp -r /tmp/halium/hooks/* /etc/initramfs-tools/hooks/
-            cp -r /tmp/halium/scripts/* /etc/initramfs-tools/scripts/
+            cd /tmp/halium
+            dpkg-buildpackage -b -uc -us || true
+            if ls /tmp/initramfs-tools-halium*.deb 1> /dev/null 2>&1; then
+              apt-get install -y /tmp/initramfs-tools-halium*.deb
+            else
+              cp -r /tmp/halium/hooks/* /etc/initramfs-tools/hooks/
+              cp -r /tmp/halium/scripts/* /etc/initramfs-tools/scripts/
+              chmod +x /etc/initramfs-tools/hooks/* /etc/initramfs-tools/scripts/* || true
+            fi
 
-            # 4. Собираем ramdisk
+            # 4. Собираем готовый ramdisk
             mkinitramfs -o /work/halium-initramfs.img "$HOST_KERNEL"
           '
           ls -lh halium-initramfs.img
