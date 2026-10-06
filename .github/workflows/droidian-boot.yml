@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - 'prebuilts/Image.gz'
+      - '.github/workflows/droidian-boot.yml'
 
 jobs:
   build-boot:
@@ -21,10 +22,12 @@ jobs:
           cp prebuilts/Image ./Image
           ls -lh ./Image
 
+      - name: Set up QEMU for ARM64
+        uses: docker/setup-qemu-action@v3
+
       - name: Build ARM64 Halium Initramfs (Debian Bookworm)
         run: |
-          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-          docker run --rm -v "${{ github.workspace }}":/work -w /work arm64v8/debian:bookworm bash -c '
+          docker run --platform linux/arm64 --rm -v "${{ github.workspace }}":/work -w /work debian:bookworm bash -c '
             apt-get update && apt-get install -y initramfs-tools busybox-static git cpio
             git clone https://github.com/droidian/initramfs-tools-halium.git /tmp/halium
             cp -r /tmp/halium/hooks/* /etc/initramfs-tools/hooks/
