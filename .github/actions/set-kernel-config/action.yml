@@ -77,5 +77,5 @@ runs:
 
       echo "Patching fanotify_fdinfo for Android GKI..."
       if [ -f "fs/notify/fdinfo.c" ]; then
-        sed -i 's/struct fsnotify_mark \*mark)/struct fsnotify_mark \*mark, struct file \*f)/g' fs/notify/fdinfo.c
+        sed -i 's/fanotify_fdinfo(struct seq_file \*m, struct fsnotify_mark \*mark)/fanotify_fdinfo(struct seq_file *m, struct fsnotify_mark *mark, struct file *f)/g' fs/notify/fdinfo.c
       fi
