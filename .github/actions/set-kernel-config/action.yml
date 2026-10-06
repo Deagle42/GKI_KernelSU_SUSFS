@@ -74,3 +74,8 @@ runs:
       while IFS= read -r line || [ -n "$line" ]; do
         apply_line "$line"
       done <<< "$CONFIG_LIST"
+
+      echo "Patching fanotify_fdinfo for Android GKI..."
+      if [ -f "fs/notify/fdinfo.c" ]; then
+        sed -i 's/struct fsnotify_mark \*mark)/struct fsnotify_mark \*mark, struct file \*f)/g' fs/notify/fdinfo.c
+      fi
