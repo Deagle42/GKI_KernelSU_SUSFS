@@ -28,11 +28,26 @@ jobs:
       - name: Build ARM64 Halium Initramfs (Debian Bookworm)
         run: |
           docker run --platform linux/arm64 --rm -v "${{ github.workspace }}":/work -w /work debian:bookworm bash -c '
-            apt-get update && apt-get install -y initramfs-tools busybox-static git cpio
+            set -euo pipefail
+            apt-get update && apt-get install -y initramfs-tools busybox-static git cpio kmod
+
+            # 1. Обманываем проверку сжатия хостового ядра
+            HOST_KERNEL=$(uname -r)
+            mkdir -p /boot /lib/modules/"$HOST_KERNEL"
+            printf "CONFIG_RD_GZIP=y\nCONFIG_RD_ZSTD=y\n" > /boot/config-"$HOST_KERNEL"
+            touch /lib/modules/"$HOST_KERNEL"/modules.dep
+
+            # 2. Настраиваем initramfs-tools на автономный режим без хостовых модулей
+            sed -i "s/^MODULES=.*/MODULES=list/" /etc/initramfs-tools/initramfs.conf
+            sed -i "s/^COMPRESS=.*/COMPRESS=gzip/" /etc/initramfs-tools/initramfs.conf
+
+            # 3. Ставим хуки Halium
             git clone https://github.com/droidian/initramfs-tools-halium.git /tmp/halium
             cp -r /tmp/halium/hooks/* /etc/initramfs-tools/hooks/
             cp -r /tmp/halium/scripts/* /etc/initramfs-tools/scripts/
-            mkinitramfs -o /work/halium-initramfs.img
+
+            # 4. Собираем ramdisk
+            mkinitramfs -o /work/halium-initramfs.img "$HOST_KERNEL"
           '
           ls -lh halium-initramfs.img
 
