@@ -29,19 +29,21 @@ jobs:
         run: |
           docker run --platform linux/arm64 --rm -v "${{ github.workspace }}":/work -w /work debian:bookworm bash -c '
             set -euo pipefail
-            apt-get update && apt-get install -y initramfs-tools busybox-static git cpio kmod
+            apt-get update && apt-get install -y initramfs-tools busybox-static git cpio kmod dpkg-dev
 
-            # 1. Обманываем проверку сжатия хостового ядра
+            # 1. Заглушки хостового ядра
             HOST_KERNEL=$(uname -r)
             mkdir -p /boot /lib/modules/"$HOST_KERNEL"
             printf "CONFIG_RD_GZIP=y\nCONFIG_RD_ZSTD=y\n" > /boot/config-"$HOST_KERNEL"
             touch /lib/modules/"$HOST_KERNEL"/modules.dep
+            touch /lib/modules/"$HOST_KERNEL"/modules.builtin
+            touch /lib/modules/"$HOST_KERNEL"/modules.builtin.modinfo
 
-            # 2. Настраиваем initramfs-tools на автономный режим без хостовых модулей
+            # 2. Автономный режим сборщика
             sed -i "s/^MODULES=.*/MODULES=list/" /etc/initramfs-tools/initramfs.conf
             sed -i "s/^COMPRESS=.*/COMPRESS=gzip/" /etc/initramfs-tools/initramfs.conf
 
-            # 3. Ставим хуки Halium
+            # 3. Клонируем и ставим хуки Halium
             git clone https://github.com/droidian/initramfs-tools-halium.git /tmp/halium
             cp -r /tmp/halium/hooks/* /etc/initramfs-tools/hooks/
             cp -r /tmp/halium/scripts/* /etc/initramfs-tools/scripts/
