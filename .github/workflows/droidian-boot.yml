@@ -1,0 +1,53 @@
+name: Build Droidian Boot Image
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'prebuilts/Image.gz'
+
+jobs:
+  build-boot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Decompress Kernel Image
+        run: |
+          set -euo pipefail
+          echo "Распаковываем Image.gz..."
+          gunzip -k prebuilts/Image.gz
+          cp prebuilts/Image ./Image
+          ls -lh ./Image
+
+      - name: Build ARM64 Halium Initramfs (Debian Bookworm)
+        run: |
+          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+          docker run --rm -v "${{ github.workspace }}":/work -w /work arm64v8/debian:bookworm bash -c '
+            apt-get update && apt-get install -y initramfs-tools busybox-static git cpio
+            git clone https://github.com/droidian/initramfs-tools-halium.git /tmp/halium
+            cp -r /tmp/halium/hooks/* /etc/initramfs-tools/hooks/
+            cp -r /tmp/halium/scripts/* /etc/initramfs-tools/scripts/
+            mkinitramfs -o /work/halium-initramfs.img
+          '
+          ls -lh halium-initramfs.img
+
+      - name: Pack boot-droidian.img (GKI Header v4)
+        run: |
+          wget -q https://raw.githubusercontent.com/LineageOS/android_system_tools_mkbootimg/lineage-19.1/mkbootimg.py
+          python3 mkbootimg.py \
+            --header_version 4 \
+            --kernel Image \
+            --ramdisk halium-initramfs.img \
+            --os_version 12.0.0 \
+            --os_patch_level 2022-01 \
+            --output boot-droidian.img
+          ls -lh boot-droidian.img
+
+      - name: Upload boot-droidian Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-droidian-image
+          path: boot-droidian.img
+          retention-days: 7
